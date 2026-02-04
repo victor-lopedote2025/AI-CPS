@@ -61,7 +61,7 @@ def plot_predictions_vs_true(y_true, y_pred):
     plt.tight_layout()
 
     MODEL_FOLDER_PATH.mkdir(parents=True, exist_ok=True)
-    out_path = MODEL_FOLDER_PATH / "ann_predictions_vs_true_test1.pdf"
+    out_path = MODEL_FOLDER_PATH / "ann_predictions_vs_true_test.pdf"
     plt.savefig(out_path)
     plt.close()
 
