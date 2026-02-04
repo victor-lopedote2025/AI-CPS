@@ -1,0 +1,4 @@
+Training iterations:    109
+MAE:                    4255224.8221
+RMSE:                   7918816.0945
+R²:                     0.6443

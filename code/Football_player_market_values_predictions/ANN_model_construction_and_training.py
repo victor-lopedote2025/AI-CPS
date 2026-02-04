@@ -8,9 +8,6 @@ from tensorflow.keras.optimizers import Adam
 from pathlib import Path
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-import numpy as np
-import matplotlib.pyplot as plt
-from tensorflow.keras.regularizers import l2
 from sklearn.preprocessing import StandardScaler
 
 TRAIN_CSV_PATH = Path("data/scraped-football-player-market-values/train/training_data_set.csv")
@@ -137,12 +134,11 @@ def build_model(X_TEST, X_TRAIN):
 
     model = Sequential([
         Dense(256, activation='relu',
-              kernel_regularizer=l2(0.0005),
               input_shape=(X_TRAIN.shape[1],)),
         BatchNormalization(),
-        Dropout(0.35),
+        Dropout(0.25),
     
-        Dense(128, activation='relu', kernel_regularizer=l2(0.0005)),
+        Dense(128, activation='relu'),
         BatchNormalization(),
         Dropout(0.25),
         Dense(64, activation='relu'),

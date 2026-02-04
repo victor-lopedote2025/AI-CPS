@@ -1,0 +1,23 @@
+services:
+  knowledgebase:
+    image: victorlopedote2025/knowledgebase_football_player_market_values_predictions:latest
+    volumes:
+       - fpmvp-volume:/tmp
+  codebase: #name of service 
+    image: victorlopedote2025/codebase_football_player_market_values_predictions:latest #image being used . 
+    depends_on:
+      - "knowledgebase"
+    volumes:
+      - fpmvp-volume:/tmp
+  apply_code_to_ann:
+    build: .
+    image: apply_code_to_ann_football_player_market_value_predicition
+    depends_on:
+      - "codebase"
+    volumes:
+       - ../../data/scraped-football-player-market-values/activation/activation_data.csv:/tmp/codeBase/activation_data.csv
+       - ../../code/Football_player_market_values_predictions/models/currentAiSolution.h5:/tmp/codeBase/currentAiSolution.h5
+       - ../../code/Football_player_market_values_predictions/ANN_apply.py:/tmp/codeBase/ANN_apply.py
+volumes:
+  fpmvp-volume:
+    external: true

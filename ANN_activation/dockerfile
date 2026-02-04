@@ -1,0 +1,9 @@
+FROM python:3.12-slim
+
+WORKDIR /tmp/codeBase/
+
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+CMD ["python /tmp/codeBase/ANN_apply.py /tmp/codeBase/currentAiSolution.h5 /tmp/codeBase/activation_data.csv"]

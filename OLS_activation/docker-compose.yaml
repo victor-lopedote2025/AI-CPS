@@ -1,0 +1,25 @@
+services:
+  knowledgebase:
+    image: knowledgebase_football_player_market_values_predictions
+    volumes:
+       - fpmvp-volume:/tmp
+    command:
+    - sh
+    - "-c"
+    - |
+      rm -rf /tmp/knowledgeBase/ && cp -r /knowledgeBase/ /tmp/;
+  codebase: #name of service 
+    image: codebase_football_player_market_values_predictions #image being used . 
+    depends_on:
+      - "knowledgebase"
+    volumes:
+       - fpmvp-volume:/tmp
+    command:
+      - sh
+      - "-c"
+      - |
+        rm -rf /tmp/codeBase/ && cp -r /codeBase/ /tmp/;
+        python3 /tmp/codeBase/ANN_apply.py /tmp/knowledgeBase/currentOlsSolution.pickle activation_data.csv;
+volumes:
+  fpmvp-volume:
+    external: true

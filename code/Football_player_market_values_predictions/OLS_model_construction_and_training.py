@@ -31,6 +31,36 @@ def coerce_numeric(df: pd.DataFrame) -> pd.DataFrame:
 
     return df2.fillna(0)
 
+def plot_residual_plot(y_pred, residuals):
+    plt.figure(figsize=(10,10))
+    plt.scatter(y_pred, residuals, alpha=0.2)
+    plt.axhline(0, color="red", linestyle="--")
+    plt.xlabel("Predicted Market Value")
+    plt.ylabel("Residual")
+    plt.title("ANN Residual Plot")
+    plt.grid(True)
+    plt.tight_layout()
+
+    MODEL_FOLDER_PATH.mkdir(parents=True, exist_ok=True)
+    out_path = MODEL_FOLDER_PATH / "ols_residual_plot.pdf"
+    plt.savefig(out_path)
+    plt.close()
+
+    print(f"Prediction plot saved to: {out_path}")
+
+def plot_residual_distribution(residuals):
+    plt.figure(figsize=(10,10))
+    plt.hist(residuals, bins=50)
+    plt.xlabel("Residual")
+    plt.ylabel("Frequency")
+    plt.title("ANN Residual Distribution")
+    plt.grid(True)
+    plt.tight_layout()
+
+    MODEL_FOLDER_PATH.mkdir(parents=True, exist_ok=True)
+    out_path = MODEL_FOLDER_PATH / "ols_residual_distribution.pdf"
+    plt.savefig(out_path)
+    plt.close()
 
 def plot_predictions_vs_true(y_true, y_pred, out_path: Path):
     plt.figure(figsize=(6, 6))
@@ -91,6 +121,9 @@ def main():
 
     # Save plot
     plot_path = MODEL_FOLDER_PATH / "ols_predictions_vs_true_test.pdf"
+    residuals = y_test - y_pred
+    plot_residual_plot(y_test, y_pred)
+    plot_residual_distribution(residuals)
     plot_predictions_vs_true(y_test.values, y_pred.values, plot_path)
     print(f"Saved OLS plot to: {plot_path}")
 

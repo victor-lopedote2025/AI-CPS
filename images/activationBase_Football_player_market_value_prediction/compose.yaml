@@ -1,0 +1,9 @@
+version: "1.0"
+services:
+  activation_base:
+    build: .
+    image: activationbase_football_player_market_value_predicition
+    volumes:
+       - sharedvol:/tmp
+volumes:
+  sharedvol:

@@ -1,0 +1,10 @@
+version: "1.0"
+services:
+  knowledge_base:
+    build: .
+    image: knowledge_base_football_player_market_value_predicition
+  volumes:
+       - fpmvp-volume:/tmp
+volumes:
+  fpmvp-volume:
+    external: true
