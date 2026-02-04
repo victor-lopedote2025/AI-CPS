@@ -3,15 +3,29 @@ import pandas as pd
 import cloudscraper
 import bs4 as bs 
 import time
+import glob
+import os
 
 URL_ROOT = "https://www.transfermarkt.com/"
-URL = "https://www.transfermarkt.com/premier-league/marktwerteverein/wettbewerb/GB1"
+URL = ["https://www.transfermarkt.com/premier-league/marktwerteverein/wettbewerb/GB1", 
+       "https://www.transfermarkt.com/ligue-1/marktwerteverein/wettbewerb/FR1",
+       "https://www.transfermarkt.com/laliga/marktwerteverein/wettbewerb/ES1",
+       "https://www.transfermarkt.com/bundesliga/marktwerteverein/wettbewerb/L1",
+       "https://www.transfermarkt.com/serie-a/marktwerteverein/wettbewerb/IT1",
+       "https://www.transfermarkt.com/jupiler-pro-league/marktwerteverein/wettbewerb/BE1",
+       "https://www.transfermarkt.com/eredivisie/marktwerteverein/wettbewerb/NL1",
+       "https://www.transfermarkt.com/super-lig/marktwerteverein/wettbewerb/TR1",
+       "https://www.transfermarkt.com/saudi-pro-league/marktwerteverein/wettbewerb/SA1",
+       "https://www.transfermarkt.com/mlstm/marktwerteverein/wettbewerb/MLS1"
+       ]
 
 def get_transfer_market_data_player_stats_for_competition(player_market_stats, name):
 
-    NATIONAL_COMPETITION_NAMES = ['Premier League']
-    INTERNATIONAL_COMPETITION_NAMES = ['Champions League']
-    NATIONAL_CUP_NAMES = ['FA Cup']
+    NATIONAL_COMPETITION_NAMES = ['Premier League', 'Serie A', 'Ligue 1', 'Bundesliga', 'LaLiga', 'Jupiler Pro League',
+                                  'Eredivisie', 'Süper Lig', 'Saudi Pro League', 'MLS']
+    INTERNATIONAL_COMPETITION_NAMES = ['Champions League', 'AFC Champions League', 'Leagues Cup']
+    NATIONAL_CUP_NAMES = ['FA Cup', 'Italy Cup', 'Coupe de France', 'DFB-Pokal', 'Copa del Rey', 'Volkswagen Supercup',
+                                  'KNVB Beker', 'TFF Süper Kupa', "King's Cup", 'US Open Cup']
 
     print("Getting player stats for :", name)
 
@@ -28,50 +42,58 @@ def get_transfer_market_data_player_stats_for_competition(player_market_stats, n
     scraper = cloudscraper.create_scraper(delay=10, browser={"custom":"ScraperBot/1.0"})
     response = scraper.get(player_stats_link)
     stats_soup = bs.BeautifulSoup(response.content, 'html.parser')
-    stats_div = stats_soup.find_all('div', class_="large-12 columns")
-    stats_box = stats_div[0].find_all('div', class_="box")[1]
-    stats_table = stats_box.find_all('table', class_="items")
 
     #Get stats table headers
-    stats_table_headers = stats_table[0].find_all('th')
-    stats_table_headers_a =  []
-    for header in stats_table_headers : 
-        stats_table_headers_a +=header.find_all('a')
-    if stats_table_headers_a == []:
-        stats_headers = [header.text if header.text != "\xa0" else header.find('span').get('title') for header in stats_table_headers]
-    else:
-        stats_headers = [header.text if header.text != "\xa0" else header.find('span').get('title') for header in stats_table_headers_a]
-    stats_headers.remove('wettbewerb')
+    try:
+        stats_div = stats_soup.find_all('div', class_="large-12 columns")
+        stats_box = stats_div[0].find_all('div', class_="box")[1]
+        stats_table = stats_box.find_all('table', class_="items")
+        stats_table_headers = stats_table[0].find_all('th')
 
-    player_stats = {}
+        stats_table_headers_a =  []
+        for header in stats_table_headers : 
+            stats_table_headers_a +=header.find_all('a')
+        if stats_table_headers_a == []:
+            stats_headers = [header.text if header.text != "\xa0" else header.find('span').get('title') for header in stats_table_headers]
+        else:
+            stats_headers = [header.text if header.text != "\xa0" else header.find('span').get('title') for header in stats_table_headers_a]
+        stats_headers.remove('wettbewerb')
+
+        player_stats = {}
     
-    for header in stats_headers:
-        player_stats[header] = []
-    
-    #Get stats table rows data
-    stats_table_rows = stats_table[0].find_all('tr')
-    stats_table_rows_without_header = stats_table_rows[1:]
-    stats_rows_data = []
-    for row in stats_table_rows_without_header:
-        rows_data = row.find_all('td')
-        stats_rows_data.append([data.text.strip('\n').replace("\xa0", "").replace("-", "Na").strip(":").strip(" ") if data.text.strip('\n')
-            .strip('\n').replace("\xa0", "").replace("-", "Na").strip(":").strip(" ")  != '' else None for data in rows_data])
-    
-    
-    #Fill player_stats dict with data
-    for data in stats_rows_data:
-        for d in data:
-            if d == None:
-                data.remove(d)
-    
-    for data in stats_rows_data:
-        for i in range(len(data)):
-            player_stats[stats_headers[i]].append(data[i])
+        for header in stats_headers:
+            player_stats[header] = []
+        
+        #Get stats table rows data
+        stats_table_rows = stats_table[0].find_all('tr')
+        stats_table_rows_without_header = stats_table_rows[1:]
+        stats_rows_data = []
+        for row in stats_table_rows_without_header:
+            rows_data = row.find_all('td')
+            stats_rows_data.append([data.text.strip('\n').replace("\xa0", "").replace("-", "Na").strip(":").strip(" ") if data.text.strip('\n')
+                .strip('\n').replace("\xa0", "").replace("-", "Na").strip(":").strip(" ")  != '' else None for data in rows_data])
+        
+        
+        #Fill player_stats dict with data
+        for data in stats_rows_data:
+            for d in data:
+                if d == None:
+                    data.remove(d)
+        
+        for data in stats_rows_data:
+            for i in range(len(data)):
+                player_stats[stats_headers[i]].append(data[i])
+
+    except:
+        player_stats = {}
+        print("No stats for: ", name)
 
     index_total = 0
     index_national = 0
     index_international = 0
     index_nationalcup = 0
+
+    
 
     for key,value in player_stats.items():
 
@@ -83,6 +105,7 @@ def get_transfer_market_data_player_stats_for_competition(player_market_stats, n
                 index_total = i
             elif player_stats[key][i] in NATIONAL_COMPETITION_NAMES:
                 index_national = i
+                player_stats["League"] = player_stats[key][i]
             elif player_stats[key][i] in INTERNATIONAL_COMPETITION_NAMES:
                 index_international = i
             elif player_stats[key][i] in NATIONAL_CUP_NAMES:
@@ -206,19 +229,22 @@ def get_transfer_market_data_market_value_for_competition(url):
     clubs = {}
 
     for c_links in club_links:
-        time.sleep(2)
-        club_name = c_links['title']
         club_link = URL_ROOT + c_links['href']
-        print(club_name)
-
+        time.sleep(2)
 
         response = scraper.get(club_link)
         club_soup = bs.BeautifulSoup(response.content, 'html.parser')
-        players_tbody = club_soup.find_all('table', class_="items")
-        players_list = players_tbody[0].find_all('tbody')
+        try:
+            players_tbody = club_soup.find_all('table', class_="items")
+            players_list = players_tbody[0].find_all('tbody')
+        except:
+            players_tbod_div = club_soup.find_all('div', class_="large-8 columns")
+            players_tbody = players_tbod_div[0].find_all('table', class_="items")
+            players_list = players_tbody[0].find_all('tbody')
+
+        
         players_market_values_list = players_list[0].find_all('td', class_="rechts hauptlink")
 
-        players_market_values = []
         players_table = players_list[0].find_all('table', class_="inline-table")
         players_data = []
 
@@ -272,10 +298,10 @@ def get_transfer_market_data_market_value_for_competition(url):
             players_collected_data[name] = new_player_data
             players_collected_data[name] = get_transfer_market_data_player_stats_for_competition(players_collected_data, name)
             print("Player market value stats retrieved for: ", name)
-        print("Player transfer market values collected for club:", club_name)
+            
     return players_collected_data
 
-def player_stats_to_csv(players_collected_data):
+def player_stats_to_csv(players_collected_data, i):
     
     d = {
         'Link' : [],
@@ -569,9 +595,29 @@ def player_stats_to_csv(players_collected_data):
             d['Competition_Nationalcup_Minutes_Played'].append(None)
 
     df = pd.DataFrame(d)
-    df.to_csv('Players_transfer_market_data_complete.csv', encoding='utf-8', index=False)
-    print("The data has been saved in 'Players_transfer_market_data.csv'")
+    df.to_csv('data/scraped-football-player-market-values/Players_transfer_market_data_complete' + str(i) + '.csv', encoding='utf-8', index=False)
+    print(f"The data has been saved in 'data/scraped-football-player-market-values/Players_transfer_market_data{str(i)}.csv")
 
-player_stats_to_csv(get_transfer_market_data_market_value_for_competition(URL))
+
+for I in range(len(URL)):
+    player_stats_to_csv(get_transfer_market_data_market_value_for_competition(URL[i]), i)
+    i+=1
+
+files = glob.glob("data/scraped-football-player-market-values/*.csv")
+
+files_to_concat = [f for f in files if f not in [
+    'data/scraped-football-player-market-values\\Players_transfer_market_data_complete.csv', 
+    'data/scraped-football-player-market-values\\Players_transfer_market_data_complete_prepared.csv'
+    ]]
+
+df_list = [pd.read_csv(f) for f in files_to_concat]
+
+df = pd.concat(df_list)
+
+df.to_csv("data/scraped-football-player-market-values/Players_transfer_market_data_complete.csv", index=False)
+
+for f in files_to_concat:
+    os.remove(f)
+
 
 #get_transfer_market_data_player_stats_for_competition('Players_transfer_market_data.csv')

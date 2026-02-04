@@ -1,8 +1,10 @@
 import re
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
 from pathlib import Path
+import glob
+import pandas as pd
+import numpy as np
 
 
 TRAIN_DIR = Path("data/scraped-football-player-market-values/train")
@@ -11,9 +13,7 @@ ACTIVATION_DIR = Path("data/scraped-football-player-market-values/activation")
 
 RANDOM_STATE = 42
 TEST_SIZE = 0.2
-HIGH_VALUE_QUANTILE = 0.75
 
-SCALER = StandardScaler()
 
 def parse_market_value_to_eur(val) -> float:
 
@@ -117,6 +117,52 @@ def parse_minutes_to_minutes(val) -> float:
     except ValueError:
         return 0.0
 
+def parse_competition_stats(val):
+    if val is None:
+        return 0.0
+    else:
+        return float(val)
+
+def parse_foot_values(val):
+    if val == 0:
+        return 'None'
+
+    s = str(val).lower()
+    return s
+
+def parse_citizenship(val):
+    if val is None or pd.isna(val):
+        return pd.NA
+
+    s = str(val).lower()
+
+    # remove non-breaking spaces and normal spaces
+    s = s.split("\xa0")[0]
+
+    return s
+
+def simplify_position(pos):
+    if pd.isna(pos):
+        return 0
+    elif "Defender" in str(pos):
+        return 2
+    elif "Midfield" in str(pos):
+        return 3
+    elif "Attack" in str(pos):
+        return 4
+    elif "Goalkeeper" in str(pos):
+        return 1
+    else:
+        return 0
+    
+def quantile_transform(data):
+    # Sort the data and compute the rank of each value
+    sorted_data = np.sort(data)
+    ranks = np.argsort(np.argsort(data))
+    # Compute the quantile values
+    quantiles = (ranks + 1) / (len(data) + 1)
+    return quantiles
+
 
 def prepare_transfermarkt_dataset(
     input_csv: str = "data/scraped-football-player-market-values/Players_transfer_market_data_complete.csv",
@@ -178,40 +224,100 @@ def prepare_transfermarkt_dataset(
     for col in df.columns:
         if not pd.api.types.is_datetime64_any_dtype(df[col]):
             df[col] = df[col].fillna(0)
+        
+        if "Competition" in col and "Minutes_" not in col:
+            df[col] = df[col].apply(parse_competition_stats)
 
+    drop_cols = ["Name", "Date of birth/Age", "Joined", "Contract expires"]
+    df = df.drop(columns=[c for c in drop_cols if c in df.columns], errors="ignore")
+    drop_cols = [c for c in df.columns if "Competition_Nationalcup" in c or "Competition_National" in c]
+    df = df.drop(columns=[c for c in drop_cols if c in df.columns], errors="ignore")
+    df_cleaned = df.dropna().copy()
+    df_cleaned = df_cleaned[
+        (df_cleaned["Market_value_eur"] > 100_000.0) &
+        (df_cleaned["Market_value_eur"] < 100_000_000.0)
+    ]
 
-    #Scaling of numerical features (excluding Market value)
-    cols_to_be_scaled = df.select_dtypes(include=["float64", "int64"]).columns
-    #cols_without_target_col = [col for col in cols_to_be_scaled if col != "Market_value_eur"]
+    foot_order = {
+        'None' : 0,
+        'right' : 1,
+        'left' : 2,
+        'both' : 3
+    }
 
-    #Converting Object types to avoid errors in model.fit()
-    categorical_cols = df.select_dtypes(include=["object"]).columns
-    unnecessary_categorical_data = [col for col in categorical_cols if col not in ["Club", "Citizenship", "Foot" ,"Position"]]
-    df = df.drop(columns=unnecessary_categorical_data, errors="ignore")
-    df = pd.get_dummies(df, columns=["Club", "Citizenship", "Foot" ,"Position"], drop_first=True)
+    df_cleaned["Foot"] = df_cleaned["Foot"].apply(parse_foot_values).map(foot_order)
+    df_cleaned["Position"] = df_cleaned["Position"].apply(simplify_position)
+    df_cleaned["Citizenship"] = df_cleaned["Citizenship"].apply(parse_citizenship)
 
-    df[cols_to_be_scaled] = SCALER.fit_transform(df[cols_to_be_scaled])
+    top_10_citizenship = df_cleaned["Citizenship"].value_counts().head(10).index
+    df_cleaned["Citizenship_Grouped"] = df_cleaned["Citizenship"].apply(
+        lambda x: x if x in top_10_citizenship else 'Other'
+    )
 
-    #Drop unnecessary columns
-    df = df.drop(columns=["Date of birth/Age"], errors="ignore")
+    citizen_dummies = pd.get_dummies(df_cleaned['Citizenship_Grouped'], prefix='Citizenship', drop_first=True)
+    df_cleaned = pd.concat([df_cleaned, citizen_dummies], axis=1)
+    df_cleaned = df_cleaned.drop(columns=["Citizenship", "Citizenship_Grouped"])
 
+    """
+    for col in citizen_dummies.columns:
+        df_cleaned[col] = df_cleaned[col].apply(
+            lambda x: 1 if x==True  else 0
+        )
+    """
+
+    top_21_clubs = df_cleaned["Club"].value_counts().head(21).index
+    df_cleaned["Club_Grouped"] = df_cleaned["Club"].apply(
+        lambda x: x if x in top_21_clubs else 'Other'
+    )
+
+    club_dummies = pd.get_dummies(df_cleaned['Club_Grouped'], prefix='Club', drop_first=True)
+    df_cleaned = pd.concat([df_cleaned, club_dummies], axis=1)
+    df_cleaned = df_cleaned.drop(columns=["Club", "Club_Grouped"])
+    
+    league_dummies = pd.get_dummies(df_cleaned['League'], prefix='League', drop_first=True)
+    df_cleaned = pd.concat([df_cleaned, league_dummies], axis=1)
+    df_cleaned = df_cleaned.drop(columns=["League"])
+
+    """
+    for col in club_dummies.columns:
+        df_cleaned[col] = df_cleaned[col].apply(
+            lambda x: 1 if x==True  else 0
+        )
+    """
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(output_path, index=False, encoding="utf-8")
+    df_cleaned.to_csv(output_path, index=False, encoding="utf-8")
 
     print(f"Saved prepared dataset to: {output_path}")
-    print("Shape:", df.shape)
-    if "Market_value_eur" in df.columns:
+    print("Shape:", df_cleaned.shape)
+    if "Market_value_eur" in df_cleaned.columns:
         print("\nMarket_value_eur summary:")
-        print(df["Market_value_eur"].describe())
-    if "Age_years" in df.columns:
+        print(df_cleaned["Market_value_eur"].describe())
+    if "Age_years" in df_cleaned.columns:
         print("\nAge_years summary:")
-        print(df["Age_years"].describe())
-    if "Contract_months_remaining" in df.columns:
+        print(df_cleaned["Age_years"].describe())
+    if "Contract_months_remaining" in df_cleaned.columns:
         print("\nContract_months_remaining summary:")
-        print(df["Contract_months_remaining"].describe())
+        print(df_cleaned["Contract_months_remaining"].describe())
     
-    return df
+    #Remove outliers
+    df_filtered = df_cleaned.copy()
+    for col in ["Market_value_eur", "Competition_Total_Appearances"]:
+        q_low = df_cleaned[col].quantile(0.25)
+        q_hi  = df_cleaned[col].quantile(0.75)
+        iqr = q_hi - q_low
+        df_filtered = df_cleaned[(df_cleaned[col] <= q_hi + 1.5 * iqr) & (df_cleaned[col] >= q_low - 1.5 * iqr)]
+
+    for col in df_filtered.columns:
+        if col not in ["Market_value_eur", "Competition_Total_Appearances"] and col not in club_dummies and col not in league_dummies and col not in citizen_dummies:
+            df_filtered[col] = quantile_transform(df_filtered[col])
+    
+    #Low correlation columns
+    drop_cols = [ "Citizenship_germany","Club_Burnley FC", "Club_VfL Wolfsburg","Club_SV Werder Bremen","Competition_Total_Assists","Competition_International_Goals_Conceded"]
+    
+    df_filtered = df_filtered.drop(columns=[c for c in drop_cols if c in df.columns], errors="ignore")
+
+    return df_filtered
 
 def split_data_into_test_and_train_csv(df):
 
